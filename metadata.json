@@ -1,0 +1,7 @@
+{
+  "name": "Elemental Entity Database",
+  "description": "High-fidelity neural archive of elemental Pokémon entities with real-time voice command integration.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
