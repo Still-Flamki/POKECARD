@@ -1,414 +1,308 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const STAGES = [
-  { 
-    id: 'dark-stone', name: "DARK STONE", status: "ORIGIN", pwr: 0, def: 100,
-    lore: "A mysterious gem that holds the essence of Zekrom. It waits for a hero with strong ideals to awaken it.",
-    icon: "fa-gem",
-    voidStatus: "DORMANT",
-    spriteId: null
-  },
-  { 
-    id: 644, name: "ZEKROM", status: "SUBJECT", pwr: 98, def: 85,
-    lore: "The legendary dragon that represents Ideals. It creates an antigravity field by ionizing the very fabric of space.",
-    spriteId: 644,
-    voidStatus: "ACTIVE"
-  },
-  { 
-    id: 646, name: "B-KYUREM", status: "ASCENDED", pwr: 100, def: 95,
-    lore: "The result of Zekrom and Kyurem fusing. It combines the power of lightning and absolute zero.",
-    spriteId: 646,
-    voidStatus: "SINGULARITY"
-  }
+const EVOLUTIONS = [
+  { id: 643, name: "RESHIRAM", label: "Truth Variant", color: "#fefefe", bg: "#0a0a0a" },
+  { id: 644, name: "ZEKROM", label: "Ideals Core", color: "#3b82f6", bg: "#020202" },
+  { id: 646, name: "KYUREM-B", label: "Black Overdrive", color: "#1e40af", bg: "#000105" }
 ];
 
-class Particle {
+interface Particle {
   x: number;
   y: number;
-  z: number;
   vx: number;
   vy: number;
   size: number;
-  rotation: number;
-  vr: number;
-  type: 'asteroid' | 'shard' | 'mote' | 'debris';
-  color: string;
   opacity: number;
+  baseOpacity: number;
+  rotation: number;
+  rotSpeed: number;
+  depth: number;
+  type: 'mote' | 'shard' | 'asteroid' | 'debris';
+  shimmerPhase: number;
+  shimmerSpeed: number;
+  sides?: number;
   history: {x: number, y: number}[];
-  sides: number;
-  offsets: number[];
-
-  constructor(width: number, height: number, type?: 'asteroid' | 'shard' | 'mote' | 'debris') {
-    this.x = Math.random() * width;
-    this.y = Math.random() * height;
-    this.z = Math.random() * 2 + 0.5; // Depth multiplier
-    this.type = type || (Math.random() > 0.85 ? 'asteroid' : (Math.random() > 0.6 ? 'shard' : (Math.random() > 0.3 ? 'mote' : 'debris')));
-    
-    // Antigravity drift (slow upward floating)
-    this.vy = -(Math.random() * 0.4 + 0.1) / this.z;
-    this.vx = (Math.random() - 0.5) * 0.3;
-    
-    this.size = this.type === 'asteroid' ? Math.random() * 25 + 10 : 
-                 this.type === 'shard' ? Math.random() * 12 + 4 : 
-                 this.type === 'mote' ? Math.random() * 3 + 1 :
-                 Math.random() * 2 + 0.5;
-    
-    this.rotation = Math.random() * Math.PI * 2;
-    this.vr = (Math.random() - 0.5) * 0.015;
-    this.color = this.type === 'mote' ? '#60a5fa' : 
-                 this.type === 'shard' ? '#3b82f6' : 
-                 this.type === 'asteroid' ? '#18181b' : '#3f3f46';
-    this.opacity = Math.random() * 0.4 + 0.2;
-    this.history = [];
-    this.sides = Math.floor(Math.random() * 3) + 5;
-    this.offsets = Array.from({length: this.sides}, () => Math.random() * 0.5 + 0.75);
-  }
-
-  update(width: number, height: number, mouseX: number, mouseY: number) {
-    const dx = this.x - mouseX;
-    const dy = this.y - mouseY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const repulsionRadius = 200;
-    const attractionRadius = 500;
-    
-    // Complex mouse interaction: Repulsion when close, subtle pull when mid-range
-    if (dist < repulsionRadius) {
-      const force = (repulsionRadius - dist) / repulsionRadius;
-      this.vx += (dx / dist) * force * 1.5;
-      this.vy += (dy / dist) * force * 1.5;
-    } else if (dist < attractionRadius) {
-      const force = (attractionRadius - dist) / attractionRadius;
-      this.vx -= (dx / dist) * force * 0.05;
-      this.vy -= (dy / dist) * force * 0.05;
-    }
-
-    // Apply basic velocity & friction
-    this.x += this.vx;
-    this.y += this.vy;
-    this.rotation += this.vr;
-    this.vx *= 0.95;
-    this.vy *= 0.95;
-    
-    // Constant upward drift
-    this.vy += -(0.15 / this.z);
-
-    // Trails for shards
-    if (this.type === 'shard') {
-      this.history.push({x: this.x, y: this.y});
-      if (this.history.length > 10) this.history.shift();
-    }
-
-    // Screen wrap
-    if (this.x < -100) this.x = width + 100;
-    if (this.x > width + 100) this.x = -100;
-    if (this.y < -100) {
-      this.y = height + 100;
-      this.x = Math.random() * width;
-    }
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rotation);
-    ctx.globalAlpha = this.opacity;
-    
-    if (this.type === 'asteroid') {
-      ctx.fillStyle = this.color;
-      ctx.beginPath();
-      for (let i = 0; i < this.sides; i++) {
-        const angle = (i / this.sides) * Math.PI * 2;
-        const r = this.size * this.offsets[i];
-        const px = Math.cos(angle) * r;
-        const py = Math.sin(angle) * r;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      
-      // Shadowing for depth
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.beginPath();
-      ctx.moveTo(0,0);
-      for (let i = 0; i < this.sides/2; i++) {
-        const angle = (i / this.sides) * Math.PI * 2;
-        ctx.lineTo(Math.cos(angle)*this.size, Math.sin(angle)*this.size);
-      }
-      ctx.fill();
-
-    } else if (this.type === 'shard') {
-      ctx.restore();
-      // Draw trails
-      if (this.history.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(this.history[0].x, this.history[0].y);
-        for(let i=1; i<this.history.length; i++) {
-          ctx.lineTo(this.history[i].x, this.history[i].y);
-        }
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.2;
-        ctx.stroke();
-      }
-      ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.rotate(this.rotation);
-      ctx.globalAlpha = this.opacity;
-      ctx.fillStyle = '#60a5fa';
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = '#3b82f6';
-      ctx.beginPath();
-      ctx.moveTo(0, -this.size);
-      ctx.lineTo(this.size/3, this.size);
-      ctx.lineTo(-this.size/3, this.size);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.fillStyle = this.color;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-      ctx.fill();
-      if (this.type === 'mote') {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
-      }
-    }
-    ctx.restore();
-  }
 }
 
-const ZekromView: React.FC = () => {
-  const [stageIndex, setStageIndex] = useState(1);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
-  const [bolt, setBolt] = useState<{ x: number, visible: boolean }>({ x: 0, visible: false });
+const ZekromView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
-  const mouseRef = useRef({ x: -1000, y: -1000 });
-  const rafRef = useRef<number>(0);
-
-  const active = STAGES[stageIndex];
+  const [evoIndex, setEvoIndex] = useState(1);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const mousePos = useRef({ x: 0, y: 0 });
+  const active = EVOLUTIONS[evoIndex];
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const bgCanvas = bgCanvasRef.current;
-    if (!canvas || !bgCanvas) return;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const bgCtx = bgCanvas.getContext('2d');
-    if (!ctx || !bgCtx) return;
+    if (!ctx) return;
 
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      bgCanvas.width = window.innerWidth;
-      bgCanvas.height = window.innerHeight;
-      
-      particlesRef.current = Array.from({ length: 150 }, () => new Particle(canvas.width, canvas.height));
-      
-      // Pre-draw nebula background
-      drawNebula(bgCtx, bgCanvas.width, bgCanvas.height);
     };
+    resize();
+    window.addEventListener('resize', resize);
 
-    const drawNebula = (c: CanvasRenderingContext2D, w: number, h: number) => {
-      c.clearRect(0, 0, w, h);
-      for(let i=0; i<3; i++) {
-        const x = Math.random() * w;
-        const y = Math.random() * h;
-        const r = Math.random() * 400 + 200;
-        const grad = c.createRadialGradient(x, y, 0, x, y, r);
-        grad.addColorStop(0, `rgba(29, 78, 216, ${0.05 + Math.random() * 0.05})`);
-        grad.addColorStop(1, 'transparent');
-        c.fillStyle = grad;
-        c.fillRect(0, 0, w, h);
-      }
-    };
+    const particles: Particle[] = [];
+    const isMobile = window.innerWidth < 768;
+    
+    // System 1: Background Shimmering Motes (Upward drift)
+    const moteCount = isMobile ? 120 : 300;
+    for (let i = 0; i < moteCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: -(Math.random() * 0.8 + 0.2),
+        size: Math.random() * 1.5 + 0.2,
+        baseOpacity: Math.random() * 0.3 + 0.1,
+        opacity: 0,
+        rotation: 0,
+        rotSpeed: 0,
+        depth: Math.random() * 0.03 + 0.01,
+        type: 'mote',
+        shimmerPhase: Math.random() * Math.PI * 2,
+        shimmerSpeed: Math.random() * 0.04 + 0.01,
+        history: []
+      });
+    }
 
-    const render = () => {
+    // System 2: Midground Shards (Tumbling debris)
+    const shardCount = isMobile ? 20 : 50;
+    for (let i = 0; i < shardCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.3,
+        size: Math.random() * 5 + 2,
+        baseOpacity: Math.random() * 0.4 + 0.2,
+        opacity: 0,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.03,
+        depth: Math.random() * 0.1 + 0.04,
+        type: 'shard',
+        shimmerPhase: 0,
+        shimmerSpeed: 0,
+        sides: Math.floor(Math.random() * 3) + 3,
+        history: []
+      });
+    }
+
+    // System 3: Foreground Heavy Asteroids (Larger chunks)
+    const asteroidCount = isMobile ? 8 : 15;
+    for (let i = 0; i < asteroidCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
+        size: Math.random() * 20 + 10,
+        baseOpacity: 0.1,
+        opacity: 0,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.01,
+        depth: Math.random() * 0.2 + 0.1,
+        type: 'asteroid',
+        shimmerPhase: 0,
+        shimmerSpeed: 0,
+        history: []
+      });
+    }
+
+    let animationId: number;
+    const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Draw connecting lines for electrical effect
-      ctx.strokeStyle = 'rgba(96, 165, 250, 0.05)';
-      ctx.lineWidth = 0.5;
-      for (let i = 0; i < particlesRef.current.length; i++) {
-        const p1 = particlesRef.current[i];
-        p1.update(canvas.width, canvas.height, mouseRef.current.x, mouseRef.current.y);
-        p1.draw(ctx);
-        
-        // Link logic
-        if (p1.type === 'mote' || p1.type === 'shard') {
-          for (let j = i + 1; j < particlesRef.current.length; j++) {
-            const p2 = particlesRef.current[j];
-            const dx = p1.x - p2.x;
-            const dy = p1.y - p2.y;
-            const d = Math.sqrt(dx*dx + dy*dy);
-            if (d < 100) {
-              ctx.beginPath();
-              ctx.moveTo(p1.x, p1.y);
-              ctx.lineTo(p2.x, p2.y);
-              ctx.stroke();
-            }
-          }
-        }
-      }
+      const mouse = mousePos.current;
       
-      rafRef.current = requestAnimationFrame(render);
+      particles.forEach(p => {
+        // Physics logic: Antigravity drift + Mouse influence
+        let dx = mouse.x - p.x;
+        let dy = mouse.y - p.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        
+        // Subtly react to mouse: Repulsion or "disturbed gravity" field
+        const forceLimit = 250;
+        if (dist < forceLimit) {
+          const force = (1 - dist / forceLimit) * 0.05;
+          p.vx -= (dx / dist) * force;
+          p.vy -= (dy / dist) * force;
+        }
+
+        // Apply friction to keep it floating gently
+        p.vx *= 0.99;
+        p.vy *= 0.99;
+
+        // Apply Velocity
+        p.x += p.vx;
+        p.y += p.vy;
+        
+        // Wrap Around logic with buffer
+        const buffer = 100;
+        if (p.x < -buffer) p.x = canvas.width + buffer;
+        if (p.x > canvas.width + buffer) p.x = -buffer;
+        if (p.y < -buffer) p.y = canvas.height + buffer;
+        if (p.y > canvas.height + buffer) p.y = -buffer;
+
+        // Parallax depth calculation
+        const px = (mouse.x - canvas.width / 2) * p.depth;
+        const py = (mouse.y - canvas.height / 2) * p.depth;
+        const rx = p.x + px;
+        const ry = p.y + py;
+
+        if (p.type === 'mote') {
+          p.shimmerPhase += p.shimmerSpeed;
+          p.opacity = p.baseOpacity * (0.2 + 0.8 * (Math.sin(p.shimmerPhase) * 0.5 + 0.5));
+          
+          ctx.globalAlpha = p.opacity;
+          ctx.fillStyle = active.color;
+          ctx.beginPath();
+          ctx.arc(rx, ry, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          p.rotation += p.rotSpeed;
+          
+          // Shard/Asteroid trails (Ghosting)
+          if (p.history.length > 5) p.history.shift();
+          p.history.push({x: rx, y: ry});
+          
+          p.history.forEach((h, idx) => {
+             const alpha = (idx / p.history.length) * 0.1 * p.baseOpacity;
+             ctx.globalAlpha = alpha;
+             ctx.fillStyle = active.color;
+             ctx.beginPath();
+             ctx.arc(h.x, h.y, p.size * 0.8, 0, Math.PI * 2);
+             ctx.fill();
+          });
+
+          ctx.globalAlpha = p.baseOpacity;
+          ctx.fillStyle = active.color;
+          ctx.save();
+          ctx.translate(rx, ry);
+          ctx.rotate(p.rotation);
+          
+          if (p.type === 'shard') {
+            ctx.beginPath();
+            const sides = p.sides || 3;
+            for (let i = 0; i < sides; i++) {
+              const ang = (i * 2 * Math.PI) / sides;
+              const r = p.size * (0.8 + Math.random() * 0.4); // slightly irregular
+              const x = r * Math.cos(ang);
+              const y = r * Math.sin(ang);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            
+            // Add an inner core glow
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(0, 0, 0.5, 0, Math.PI * 2);
+            ctx.fill();
+
+          } else if (p.type === 'asteroid') {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = active.color;
+            ctx.beginPath();
+            // Blocky irregular asteroid shape
+            const s = p.size;
+            ctx.moveTo(-s/2, -s/4);
+            ctx.lineTo(-s/3, -s/2);
+            ctx.lineTo(s/4, -s/2.2);
+            ctx.lineTo(s/2, -s/4);
+            ctx.lineTo(s/2.2, s/4);
+            ctx.lineTo(s/4, s/2);
+            ctx.lineTo(-s/3, s/1.8);
+            ctx.lineTo(-s/2, s/4);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Wireframe detail
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      });
+      animationId = requestAnimationFrame(animate);
     };
+    animate();
 
-    window.addEventListener('resize', resize);
-    resize();
-    render();
-
-    const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current = { x: e.clientX, y: e.clientY };
+    const handleMove = (e: MouseEvent) => {
+      mousePos.current = { x: e.clientX, y: e.clientY };
       setTilt({
-        x: (window.innerWidth / 2 - e.clientX) / 50,
-        y: (window.innerHeight / 2 - e.clientY) / 50
+        x: (window.innerWidth / 2 - e.clientX) / 100,
+        y: (window.innerHeight / 2 - e.clientY) / 100
       });
     };
-
-    window.addEventListener('mousemove', handleMouseMove);
-
-    const boltInterval = setInterval(() => {
-      if (Math.random() > 0.8) {
-        setBolt({ x: Math.random() * 100, visible: true });
-        setTimeout(() => setBolt(prev => ({ ...prev, visible: false })), 60);
-      }
-    }, 4000);
-
+    window.addEventListener('mousemove', handleMove);
+    
     return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      cancelAnimationFrame(rafRef.current);
-      clearInterval(boltInterval);
     };
-  }, []);
+  }, [evoIndex, active.color]);
 
   return (
-    <div className="w-full h-full flex items-center justify-center relative bg-[#010106] overflow-hidden p-4 sm:p-12">
-      <canvas ref={bgCanvasRef} className="absolute inset-0 z-0 pointer-events-none opacity-40" />
-      <canvas ref={canvasRef} className="absolute inset-0 z-[1] pointer-events-none opacity-80" />
+    <div className="fixed inset-0 transition-colors duration-1000 flex items-center justify-center p-6 overflow-hidden" style={{ backgroundColor: active.bg }}>
+      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none mix-blend-screen z-0" />
       
-      {/* Dynamic Dark Lightning Strikes */}
-      {bolt.visible && (
-        <div 
-          className="absolute z-10 w-[4px] bg-blue-400 shadow-[0_0_40px_#3b82f6] h-full transition-opacity duration-100 mix-blend-screen"
-          style={{ 
-            left: bolt.x + '%', 
-            opacity: 0.8, 
-            clipPath: 'polygon(0% 0%, 100% 0%, 40% 20%, 90% 40%, 10% 60%, 80% 80%, 0% 100%)' 
-          }}
-        />
-      )}
+      {/* Dynamic Data Overlay */}
+      <div className="absolute top-10 left-10 z-10 space-y-2 pointer-events-none hidden sm:block">
+        <div className="text-[9px] font-orbitron font-black text-white/30 tracking-[0.4em]">NEURAL_SYNC_LINK: <span className="text-emerald-500">ESTABLISHED</span></div>
+        <div className="text-[9px] font-orbitron font-black text-white/10 tracking-[0.4em]">GRAV_WELL_COORD: {Math.floor(mousePos.current.x)},{Math.floor(mousePos.current.y)}</div>
+      </div>
+
+      <div className="absolute top-10 right-10 z-10 text-[10px] font-orbitron font-black text-white/20 tracking-[0.8em] pointer-events-none">
+        GRAVITY_NULL_FIELD: <span className="text-blue-500 animate-pulse">STABILIZED</span>
+      </div>
 
       <div 
-        className="relative w-full max-w-[440px] h-[85vh] transition-transform duration-300 ease-out preserve-3d z-20 group animate-void-hover"
+        className="relative z-20 flex flex-col items-center justify-center zekrom-node"
         style={{ transform: `rotateY(${tilt.x}deg) rotateX(${-tilt.y}deg)` }}
       >
-        <div className="absolute inset-0 bg-black/80 border-2 border-blue-500/20 rounded-[55px] sm:rounded-[75px] shadow-[0_0_150px_rgba(59,130,246,0.1)] overflow-hidden flex flex-col backdrop-blur-3xl transition-all duration-700 hover:border-blue-500/50 hover:shadow-[0_0_200px_rgba(59,130,246,0.2)]">
-          <div className="p-10 pb-4 flex justify-between items-start z-10">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
-                 <span className="text-blue-500/60 text-[10px] font-black uppercase tracking-[0.6em]">Zero-G Sync Established</span>
-              </div>
-              <h2 className="text-5xl sm:text-7xl font-orbitron font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(59,130,246,0.6)] italic uppercase leading-none">{active.name}</h2>
-            </div>
-            <div className="w-16 h-16 rounded-[28px] bg-gradient-to-tr from-blue-700 to-blue-400 flex items-center justify-center text-black font-orbitron font-black text-3xl shadow-[0_0_50px_rgba(59,130,246,0.8)] animate-float-pulse">
-               <i className={`fa-solid ${active.icon || 'fa-atom'}`}></i>
-            </div>
+        <div className="absolute inset-0 blur-[250px] rounded-full animate-pulse transition-colors duration-1000" style={{ backgroundColor: `${active.color}20` }} />
+        <img 
+          key={active.id}
+          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${active.id}.png`}
+          className="max-h-[55vh] sm:max-h-[75vh] w-auto max-w-[90vw] drop-shadow-[0_0_120px_rgba(59,130,246,0.2)] animate-in zoom-in fade-in duration-1000 z-30 transition-all duration-700 hover:scale-105 active:scale-95"
+          alt={active.name}
+        />
+        <div className="mt-10 text-center relative z-40">
+          <h1 className="text-6xl sm:text-8xl md:text-9xl font-orbitron font-black tracking-tighter uppercase italic text-white leading-none drop-shadow-[0_0_40px_rgba(255,255,255,0.1)]">
+            {active.name}
+          </h1>
+          <div className="flex flex-col items-center gap-2 mt-6">
+            <p className="text-xs sm:text-lg font-black uppercase tracking-[1.5em] text-white/30 italic">{active.label}</p>
+            <div className="h-[2px] w-32 bg-gradient-to-r from-transparent via-blue-500/40 to-transparent"></div>
           </div>
-
-          <div className="flex-1 mx-8 mt-6 bg-zinc-950/40 rounded-[50px] sm:rounded-[65px] border border-blue-500/10 relative overflow-hidden flex items-center justify-center transition-all duration-700 group-hover:border-blue-500/30">
-             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.05)_0%,transparent_70%)] animate-pulse" />
-             
-             {/* Antigravity Glow Rings */}
-             <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-72 h-72 border border-blue-500/10 rounded-full animate-ripple-slow opacity-20" />
-                <div className="w-56 h-56 border border-blue-500/5 rounded-full animate-pulse-slow" />
-             </div>
-
-             <div className="w-full h-full p-10 flex items-center justify-center relative">
-                {active.spriteId ? (
-                  <img 
-                    key={active.spriteId}
-                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${active.spriteId}.png`} 
-                    alt={active.name}
-                    className="max-w-[125%] max-h-full object-contain drop-shadow-[0_0_80px_rgba(59,130,246,0.9)] group-hover:scale-110 transition-transform duration-1000 z-20 animate-in zoom-in fade-in"
-                  />
-                ) : (
-                  <div className="w-44 h-44 bg-blue-500/10 rounded-full blur-3xl animate-pulse flex items-center justify-center">
-                    <i className="fa-solid fa-gem text-7xl text-blue-400/30"></i>
-                  </div>
-                )}
-             </div>
-             
-             <div className="absolute bottom-8 left-8 flex flex-col font-mono text-[9px] text-blue-500/40 z-20 uppercase tracking-widest">
-               <div>VOID_MASS: {active.pwr}</div>
-               <div>STABILITY: {active.def}%</div>
-             </div>
-          </div>
-
-          <div className="px-10 mt-6 flex items-center justify-center gap-6">
-             {STAGES.map((stage, idx) => (
-                <button 
-                  key={idx} 
-                  onClick={() => setStageIndex(idx)}
-                  className="flex flex-col items-center group/evo cursor-pointer focus:outline-none"
-                >
-                  <div className={`w-14 h-14 rounded-full border-2 ${stageIndex === idx ? 'border-blue-400 bg-blue-400/20 shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'border-white/10 bg-white/5'} flex items-center justify-center relative overflow-hidden transition-all duration-300 hover:scale-110`}>
-                     {stage.icon ? (
-                       <i className={`fa-solid ${stage.icon} text-white/40 text-xl`}></i>
-                     ) : (
-                       <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${stage.spriteId}.png`} className="w-full h-full scale-125 object-contain" alt={stage.name} />
-                     )}
-                  </div>
-                  <span className={`text-[8px] mt-2 font-black uppercase tracking-widest ${stageIndex === idx ? 'text-blue-400' : 'text-white/20'}`}>{stage.name}</span>
-                </button>
-             ))}
-          </div>
-
-          <div className="p-10 space-y-8">
-             <div className="bg-blue-500/5 border border-white/5 p-6 rounded-[35px] backdrop-blur-sm shadow-inner text-center">
-                <p className="text-blue-100/40 text-[11px] font-bold italic leading-relaxed">"{active.lore}"</p>
-             </div>
-             <div className="flex justify-around items-center text-[10px] font-black uppercase tracking-[0.4em] text-blue-500">
-                <div className="text-center group/stat">
-                   <div className="text-3xl text-white font-orbitron group-hover:text-blue-300 transition-colors">{active.pwr}%</div>
-                   <div className="opacity-40 text-[8px] mt-2">ION CHARGE</div>
-                </div>
-                <div className="w-[1px] h-12 bg-blue-500/20"></div>
-                <div className="text-center group/stat">
-                   <div className="text-3xl text-white font-orbitron group-hover:text-blue-300 transition-colors">{active.def}%</div>
-                   <div className="opacity-40 text-[8px] mt-2">IDEAL SYNC</div>
-                </div>
-             </div>
-          </div>
-
-          <button className="h-20 bg-blue-600 hover:bg-white text-black flex items-center justify-center transition-all duration-700 cursor-pointer font-black uppercase tracking-[2em] text-xs shadow-2xl relative overflow-hidden group/btn">
-             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer" />
-             FUSION BOLT
-          </button>
         </div>
       </div>
 
-      <style>{`
-        .preserve-3d { transform-style: preserve-3d; }
-        @keyframes void-hover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-        .animate-void-hover { animation: void-hover 6s ease-in-out infinite; }
-        @keyframes float-pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
-        .animate-float-pulse { animation: float-pulse 3s ease-in-out infinite; }
-        @keyframes ripple-slow { 0% { transform: scale(0.8); opacity: 0; } 50% { opacity: 0.3; } 100% { transform: scale(1.5); opacity: 0; } }
-        .animate-ripple-slow { animation: ripple-slow 5s linear infinite; }
-        @keyframes pulse-slow { 0%, 100% { transform: scale(1); opacity: 0.05; } 50% { transform: scale(1.2); opacity: 0.15; } }
-        .animate-pulse-slow { animation: pulse-slow 4s ease-in-out infinite; }
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .animate-shimmer { animation: shimmer 3s linear infinite; }
-      `}</style>
+      {/* Genetic Selector */}
+      <div className="fixed bottom-24 sm:bottom-32 flex gap-4 sm:gap-10 z-50 p-4 sm:p-6 bg-white/5 backdrop-blur-3xl rounded-[40px] border border-white/10 animate-in slide-in-from-bottom-10 shadow-2xl">
+        {EVOLUTIONS.map((evo, i) => (
+          <button 
+            key={evo.id}
+            onClick={() => setEvoIndex(i)}
+            className={`w-16 h-16 sm:w-28 sm:h-28 rounded-2xl sm:rounded-[40px] border-2 transition-all duration-700 flex flex-col items-center justify-center p-2 group ${evoIndex === i ? 'border-white bg-white/10 scale-110 shadow-[0_0_50px_rgba(255,255,255,0.2)]' : 'border-white/5 bg-zinc-900/40 grayscale opacity-30 hover:opacity-100 hover:grayscale-0 hover:border-white/20'}`}
+          >
+            <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evo.id}.png`} className="w-10 h-10 sm:w-20 sm:h-20 object-contain group-hover:scale-110 transition-transform duration-500" />
+            <div className="text-[6px] sm:text-[9px] font-black uppercase text-white/40 mt-1">{evo.name}</div>
+          </button>
+        ))}
+      </div>
+
+      <button onClick={onBack} className="fixed bottom-8 sm:bottom-12 px-10 py-4 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all font-black text-[10px] sm:text-[12px] tracking-[2em] uppercase text-white/60 z-50 backdrop-blur-md">
+        EXIT DATA
+      </button>
     </div>
   );
 };

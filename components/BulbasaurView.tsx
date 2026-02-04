@@ -1,156 +1,160 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-const STAGES = [
-  { 
-    id: 1, name: "BULBASAUR", growth: 65, poison: 45, 
-    lore: "A strange seed was planted on its back at birth. The plant sprouts and grows with this Pokémon."
-  },
-  { 
-    id: 2, name: "IVYSAUR", growth: 80, poison: 60, 
-    lore: "When the bulb on its back grows large, it appears to lose the ability to stand on its hind legs."
-  },
-  { 
-    id: 3, name: "VENUSAUR", growth: 100, poison: 85, 
-    lore: "The plant blooms when it is absorbing solar energy. It stays on the move to seek sunlight."
-  }
+const EVOLUTIONS = [
+  { id: 1, name: "BULBASAUR", class: "Seed Specimen" },
+  { id: 2, name: "IVYSAUR", class: "Bud Specimen" },
+  { id: 3, name: "VENUSAUR", class: "Bloom Specimen" }
 ];
 
-const BulbasaurView: React.FC = () => {
-  const [stageIndex, setStageIndex] = useState(0);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+interface LeafParticle {
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+  sway: number;
+  swaySpeed: number;
+  angle: number;
+  rotationSpeed: number;
+  color: string;
+  opacity: number;
+}
 
-  const active = STAGES[stageIndex];
+const BulbasaurView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [evoIndex, setEvoIndex] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const active = EVOLUTIONS[evoIndex];
 
   useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
-      setTilt({
-        x: (window.innerWidth / 2 - e.clientX) / 45,
-        y: (window.innerHeight / 2 - e.clientY) / 45
-      });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const updateCanvasSize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     };
-    window.addEventListener('mousemove', handleMove);
-    return () => window.removeEventListener('mousemove', handleMove);
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+
+    const particles: LeafParticle[] = [];
+    const leafColors = ['#10b981', '#059669', '#34d399', '#065f46'];
+    const count = window.innerWidth < 768 ? 40 : 80;
+
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 6 + 4,
+        speed: Math.random() * 1.5 + 0.5,
+        sway: Math.random() * Math.PI * 2,
+        swaySpeed: Math.random() * 0.03 + 0.01,
+        angle: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.05,
+        color: leafColors[Math.floor(Math.random() * leafColors.length)],
+        opacity: Math.random() * 0.6 + 0.2
+      });
+    }
+
+    let animationId: number;
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      particles.forEach(p => {
+        // Physics update
+        p.y += p.speed;
+        p.sway += p.swaySpeed;
+        p.angle += p.rotationSpeed;
+        
+        // Fluttering movement
+        const renderX = p.x + Math.sin(p.sway) * 20;
+        
+        // Drawing leaf
+        ctx.save();
+        ctx.translate(renderX, p.y);
+        ctx.rotate(p.angle);
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+        
+        // Leaf shape (elliptical)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size, p.size / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Leaf vein
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-p.size, 0);
+        ctx.lineTo(p.size, 0);
+        ctx.stroke();
+        
+        ctx.restore();
+
+        // Screen wrap
+        if (p.y > canvas.height + 20) {
+          p.y = -20;
+          p.x = Math.random() * canvas.width;
+        }
+      });
+      
+      animationId = requestAnimationFrame(animate);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener('resize', updateCanvasSize);
+    };
   }, []);
 
   return (
-    <div className="w-full h-full flex items-center justify-center relative bg-[#010a05] overflow-hidden p-6 sm:p-12">
-      <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/30 via-transparent to-transparent pointer-events-none" />
+    <div className="fixed inset-0 bg-[#010502] flex flex-col items-center justify-center overflow-hidden">
+      {/* Background Ambience */}
+      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.05)_0%,transparent_70%)] pointer-events-none" />
       
-      {/* Solar Spores / Pollen */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        {Array.from({ length: 50 }).map((_, i) => (
-          <div 
-            key={i}
-            className="absolute rounded-full bg-emerald-400/30 blur-[2px] animate-spore-float"
-            style={{
-              width: (Math.random() * 6 + 2) + 'px',
-              height: (Math.random() * 6 + 2) + 'px',
-              left: Math.random() * 100 + '%',
-              top: Math.random() * 100 + '%',
-              animationDuration: (Math.random() * 10 + 5) + 's',
-              animationDelay: (Math.random() * 10) + 's',
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="absolute inset-0 pointer-events-none z-0">
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div 
-            key={i}
-            className={`absolute rounded-full blur-[1px] animate-leaf-fall ${i % 2 === 0 ? 'bg-emerald-500/40' : 'bg-green-600/30'}`}
-            style={{
-              width: (Math.random() * 10 + 6) + 'px',
-              height: (Math.random() * 15 + 8) + 'px',
-              left: Math.random() * 100 + '%',
-              top: '-10%',
-              animationDuration: Math.random() * 10 + 5 + 's',
-              animationDelay: Math.random() * 20 + 's',
-              opacity: Math.random() * 0.6 + 0.3
-            }}
-          />
-        ))}
-      </div>
-
-      <div 
-        className="relative w-full max-w-[420px] h-[82vh] min-h-[600px] transition-transform duration-300 ease-out preserve-3d z-20 group"
-        style={{ transform: `rotateY(${tilt.x}deg) rotateX(${-tilt.y}deg)` }}
-      >
-        <div className="absolute inset-0 bg-[#051a0e] border-2 border-emerald-500/40 rounded-[45px] sm:rounded-[65px] shadow-[0_0_80px_rgba(16,185,129,0.15)] overflow-hidden flex flex-col backdrop-blur-3xl">
-          <div className="p-8 pb-4 flex justify-between items-start z-10">
-            <div>
-              <h2 className="text-4xl sm:text-5xl font-orbitron font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(16,185,247,0.6)] italic">{active.name}</h2>
-              <div className="text-emerald-400 text-[9px] font-black uppercase tracking-[0.8em] opacity-80">ID: {String(active.id).padStart(3, '0')}</div>
-            </div>
-            <div className="w-14 h-14 rounded-full bg-emerald-600 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.8)]">
-               <i className="fa-solid fa-leaf text-2xl text-white"></i>
-            </div>
-          </div>
-
-          <div className="flex-1 mx-6 bg-gradient-to-br from-emerald-900/40 via-black to-black rounded-[40px] sm:rounded-[55px] border border-emerald-500/20 relative overflow-hidden flex items-center justify-center">
-             <div className="w-full h-full p-8 flex items-center justify-center relative">
-                <img 
-                  key={active.id}
-                  src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${active.id}.png`} 
-                  alt={active.name}
-                  className="max-w-[110%] max-h-full object-contain drop-shadow-[0_0_50px_rgba(16,185,129,0.7)] group-hover:scale-110 transition-transform duration-1000 z-20 animate-in fade-in"
-                />
+      <div className="relative z-10 flex flex-col items-center animate-in zoom-in fade-in duration-1000 p-6">
+        <div className="absolute inset-0 blur-[150px] sm:blur-[250px] bg-emerald-600/15 rounded-full animate-pulse" />
+        
+        <img 
+          key={active.id}
+          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${active.id}.png`}
+          className="max-h-[45vh] sm:max-h-[60vh] md:max-h-[75vh] w-auto max-w-[85vw] drop-shadow-[0_0_120px_rgba(16,185,129,0.4)] z-30 transition-all duration-1000 hover:scale-105"
+          alt={active.name}
+        />
+        
+        <div className="mt-10 text-center relative z-40">
+          <h1 className="text-5xl sm:text-7xl md:text-9xl font-orbitron font-black tracking-tighter uppercase italic text-white leading-none drop-shadow-[0_0_50px_rgba(255,255,255,0.2)]">
+            {active.name}
+          </h1>
+          <div className="mt-6 flex flex-col items-center gap-4">
+             <div className="px-8 py-2 border border-emerald-500/30 bg-emerald-500/10 rounded-full backdrop-blur-md">
+                <span className="text-emerald-400 text-[10px] sm:text-[12px] font-black uppercase tracking-[0.8em] sm:tracking-[1.2em]">BIO_SYNC: STABLE</span>
              </div>
-          </div>
-
-          <div className="px-8 mt-4 flex items-center justify-center gap-4">
-             {STAGES.map((stage, idx) => (
-                <button 
-                  key={stage.id} 
-                  onClick={() => setStageIndex(idx)}
-                  className="flex flex-col items-center group/evo focus:outline-none"
-                >
-                   <div className={`w-12 h-12 rounded-full border ${stageIndex === idx ? 'border-emerald-400 bg-emerald-400/20 shadow-[0_0_20px_rgba(52,211,153,0.5)]' : 'border-white/10 bg-white/5'} flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110`}>
-                      <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${stage.id}.png`} className="w-full h-full scale-125 object-contain" alt={stage.name} />
-                   </div>
-                   <span className={`text-[8px] mt-1 font-black uppercase tracking-widest ${stageIndex === idx ? 'text-emerald-400' : 'text-white/20'}`}>{stage.name}</span>
-                </button>
-             ))}
-          </div>
-
-          <div className="p-6 space-y-4">
-             <div className="bg-emerald-500/5 border border-emerald-500/20 p-3 rounded-[20px]">
-                <p className="text-emerald-100/40 text-[9px] sm:text-[10px] font-bold italic text-center">"{active.lore}"</p>
-             </div>
-             <div className="flex justify-around items-center text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                <div className="text-center">
-                   <div className="text-xl text-white font-orbitron">{active.growth}</div>
-                   <span className="text-[8px] opacity-60">GROWTH</span>
-                </div>
-                <div className="w-px h-6 bg-emerald-500/20"></div>
-                <div className="text-center">
-                   <div className="text-xl text-white font-orbitron">{active.poison}</div>
-                   <span className="text-[8px] opacity-60">POISON</span>
-                </div>
-             </div>
-          </div>
-
-          <div className="h-14 sm:h-16 bg-emerald-600 hover:bg-white text-black flex items-center justify-center transition-all cursor-pointer font-black uppercase tracking-[1.2em] text-xs">
-             Solar Beam
+             <p className="text-white/20 text-[8px] sm:text-[10px] font-black tracking-[1em] uppercase italic">{active.class}</p>
           </div>
         </div>
       </div>
 
-      <style>{`
-        @keyframes leaf-fall { 
-          0% { transform: translateY(0) rotate(0deg) translateX(0); opacity: 0; } 
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(110vh) rotate(360deg) translateX(50px); opacity: 0; } 
-        }
-        .animate-leaf-fall { animation: leaf-fall linear infinite; }
-        @keyframes spore-float {
-          0%, 100% { transform: translate(0, 0); opacity: 0.1; }
-          50% { transform: translate(40px, -40px); opacity: 0.4; }
-        }
-        .animate-spore-float { animation: spore-float linear infinite; }
-      `}</style>
+      {/* Evolution Selector */}
+      <div className="fixed bottom-24 sm:bottom-32 flex gap-4 sm:gap-10 z-50 p-4 sm:p-6 bg-emerald-950/20 backdrop-blur-3xl rounded-[35px] sm:rounded-[50px] border border-white/5 animate-in slide-in-from-bottom-10">
+        {EVOLUTIONS.map((evo, i) => (
+          <button 
+            key={evo.id}
+            onClick={() => setEvoIndex(i)}
+            className={`w-16 h-16 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[35px] border-2 transition-all duration-700 flex flex-col items-center justify-center p-1 sm:p-2 group ${evoIndex === i ? 'border-emerald-500 bg-emerald-500/30 scale-110 shadow-[0_0_50px_rgba(16,185,129,0.4)]' : 'border-white/5 bg-zinc-900/40 grayscale opacity-30 hover:opacity-100 hover:grayscale-0'}`}
+          >
+            <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evo.id}.png`} className="w-10 h-10 sm:w-16 sm:h-16 object-contain group-hover:scale-110 transition-transform" />
+            <div className="text-[6px] sm:text-[8px] font-black uppercase text-white/40 mt-1">{evo.name}</div>
+          </button>
+        ))}
+      </div>
+
+      <button onClick={onBack} className="fixed bottom-8 sm:bottom-12 px-8 sm:px-12 py-3 sm:py-4 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all font-black text-[10px] sm:text-[12px] tracking-[1.5em] uppercase text-white/60 z-50">
+        EXIT ARCHIVE
+      </button>
     </div>
   );
 };

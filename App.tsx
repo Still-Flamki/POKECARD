@@ -1,7 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Realm, ViewState } from './types';
+import HomeView from './components/HomeView';
 import PokemonSection from './components/PokemonSection';
+import CharacterSection from './components/CharacterSection';
 import ZekromView from './components/ZekromView';
 import PikachuView from './components/PikachuView';
 import CharizardView from './components/CharizardView';
@@ -15,11 +17,118 @@ import SnorlaxView from './components/SnorlaxView';
 import CommandCenter from './components/CommandCenter';
 
 const App: React.FC = () => {
-  const [viewState, setViewState] = useState<ViewState>('POKEMON_SECTION');
+  const [viewState, setViewState] = useState<ViewState>('BOOT');
   const [activeRealm, setActiveRealm] = useState<Realm>(Realm.ZEKROM);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleBack = () => setViewState(viewState === 'POKEMON_DETAIL' ? 'POKEMON_SECTION' : 'HOME');
+
+  // Theme mapping for background particles
+  const themeColors: Record<Realm, string> = {
+    [Realm.ZEKROM]: '#3b82f6',
+    [Realm.PIKACHU]: '#eab308',
+    [Realm.CHARIZARD]: '#f97316',
+    [Realm.MEWTWO]: '#a855f7',
+    [Realm.SQUIRTLE]: '#06b6d4',
+    [Realm.BULBASAUR]: '#10b981',
+    [Realm.WOBBUFFET]: '#3b82f6',
+    [Realm.GENGAR]: '#6d28d9',
+    [Realm.MAGNETON]: '#a1a1aa',
+    [Realm.SNORLAX]: '#059669',
+  };
+
+  useEffect(() => {
+    // Initial Boot Sequence
+    const timer = setTimeout(() => {
+      setViewState('HOME');
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationId: number;
+    let particles: { x: number; y: number; vx: number; vy: number; size: number }[] = [];
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      particles = Array.from({ length: 40 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        size: Math.random() * 2,
+      }));
+    };
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const color = viewState === 'HOME' ? '#3b82f6' : themeColors[activeRealm];
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.15;
+
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        particles.forEach((p2) => {
+          const dist = Math.sqrt((p.x - p2.x) ** 2 + (p.y - p2.y) ** 2);
+          if (dist < 180) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = (1 - dist / 180) * 0.04;
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        });
+      });
+
+      animationId = requestAnimationFrame(render);
+    };
+
+    render();
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener('resize', resize);
+    };
+  }, [activeRealm, viewState]);
 
   const renderContent = () => {
     switch (viewState) {
+      case 'BOOT':
+        return (
+          <div className="h-full w-full flex flex-col items-center justify-center bg-black gap-6 animate-pulse">
+            <div className="w-24 h-[1px] bg-blue-500/50"></div>
+            <div className="text-[12px] font-orbitron font-black tracking-[1.5em] text-blue-400 uppercase">
+              Initializing_Sovereign_Link
+            </div>
+            <div className="flex gap-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'HOME':
+        return <HomeView onSelectSection={(state) => setViewState(state)} />;
+      case 'CHARACTER_SECTION':
+        return <CharacterSection onBack={() => setViewState('HOME')} />;
       case 'POKEMON_SECTION':
         return (
           <PokemonSection 
@@ -27,67 +136,46 @@ const App: React.FC = () => {
               setActiveRealm(realm);
               setViewState('POKEMON_DETAIL');
             }} 
-            onBack={() => {}} 
+            onBack={() => setViewState('HOME')} 
           />
         );
       case 'POKEMON_DETAIL':
-        switch (activeRealm) {
-          case Realm.ZEKROM: return <ZekromView />;
-          case Realm.PIKACHU: return <PikachuView />;
-          case Realm.CHARIZARD: return <CharizardView />;
-          case Realm.MEWTWO: return <MewtwoView />;
-          case Realm.SQUIRTLE: return <SquirtleView />;
-          case Realm.BULBASAUR: return <BulbasaurView />;
-          case Realm.WOBBUFFET: return <WobbuffetView />;
-          case Realm.GENGAR: return <GengarView />;
-          case Realm.MAGNETON: return <MagnetonView />;
-          case Realm.SNORLAX: return <SnorlaxView />;
-          default: return <ZekromView />;
-        }
-      default:
+        const views: Record<Realm, React.ReactNode> = {
+          [Realm.ZEKROM]: <ZekromView onBack={handleBack} />,
+          [Realm.PIKACHU]: <PikachuView onBack={handleBack} />,
+          [Realm.CHARIZARD]: <CharizardView onBack={handleBack} />,
+          [Realm.MEWTWO]: <MewtwoView onBack={handleBack} />,
+          [Realm.SQUIRTLE]: <SquirtleView onBack={handleBack} />,
+          [Realm.BULBASAUR]: <BulbasaurView onBack={handleBack} />,
+          [Realm.WOBBUFFET]: <WobbuffetView onBack={handleBack} />,
+          [Realm.GENGAR]: <GengarView onBack={handleBack} />,
+          [Realm.MAGNETON]: <MagnetonView onBack={handleBack} />,
+          [Realm.SNORLAX]: <SnorlaxView onBack={handleBack} />,
+        };
         return (
-          <PokemonSection 
-            onSelectPokemon={(realm) => {
-              setActiveRealm(realm);
-              setViewState('POKEMON_DETAIL');
-            }} 
-            onBack={() => {}}
-          />
+          <>
+            {views[activeRealm]}
+            <CommandCenter activeRealm={activeRealm} />
+          </>
         );
+      default:
+        return <HomeView onSelectSection={(state) => setViewState(state)} />;
     }
   };
 
   return (
-    <div className="h-screen w-full flex flex-col relative overflow-hidden bg-black text-white font-rajdhani">
-      <div className="fixed inset-0 pointer-events-none opacity-20 static-overlay z-0" />
-
+    <div className="h-screen w-full flex flex-col relative overflow-hidden bg-black text-white font-rajdhani chromatic-aberration">
+      <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
+      <div className="fixed inset-0 pointer-events-none opacity-5 static-overlay z-[99]" />
+      
       <main className="flex-1 w-full h-full relative z-10 overflow-hidden">
         {renderContent()}
       </main>
 
-      {/* Global Interface Overlay */}
-      {viewState === 'POKEMON_DETAIL' && (
-        <>
-          <nav className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[100] flex gap-4 p-2 bg-black/80 backdrop-blur-2xl rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 fade-in duration-700">
-            <button 
-              onClick={() => setViewState('POKEMON_SECTION')}
-              className="px-10 h-14 rounded-full bg-emerald-600/10 border border-emerald-500/30 flex items-center gap-3 hover:bg-emerald-500/20 transition-all group"
-            >
-              <i className="fa-solid fa-grid-2 text-emerald-400 group-hover:scale-125 transition-transform"></i>
-              <span className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-400">Unit Registry</span>
-            </button>
-          </nav>
-          
-          <CommandCenter activeRealm={activeRealm} />
-        </>
-      )}
-
-      {/* Global Status Bar */}
-      <div className="fixed top-6 left-6 z-40 flex items-center gap-4 pointer-events-none opacity-60">
-        <div className="h-[1px] w-8 bg-emerald-500/50"></div>
-        <div className="text-[10px] font-black uppercase tracking-[0.6em] text-emerald-500/80">
-          REALM_LINK: {activeRealm.toUpperCase()} // STATUS: ACTIVE
-        </div>
+      {/* Persistent Technical Markers */}
+      <div className="fixed top-8 left-8 z-[100] pointer-events-none mix-blend-difference hidden sm:flex flex-col gap-1">
+        <div className="text-[11px] font-orbitron font-black uppercase tracking-[1em] text-white/50">ARCHIVE_NODE_09</div>
+        <div className="h-[1px] w-32 bg-white/20"></div>
       </div>
     </div>
   );

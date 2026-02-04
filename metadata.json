@@ -1,6 +1,6 @@
 {
-  "name": "Elemental Entity Database",
-  "description": "High-fidelity neural archive of elemental Pokémon entities with real-time voice command integration.",
+  "name": "Elemental Legends: Sovereign Archive",
+  "description": "A high-fidelity cinematic archive of elemental legends with evolution tracking and interactive environments.",
   "requestFramePermissions": [
     "microphone"
   ]

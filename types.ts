@@ -12,7 +12,7 @@ export enum Realm {
   SNORLAX = 'snorlax'
 }
 
-export type ViewState = 'POKEMON_SECTION' | 'POKEMON_DETAIL';
+export type ViewState = 'BOOT' | 'HOME' | 'POKEMON_SECTION' | 'POKEMON_DETAIL' | 'CHARACTER_SECTION';
 
 export interface Message {
   role: 'user' | 'model';
